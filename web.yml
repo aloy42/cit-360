@@ -1,6 +1,7 @@
 ---
 - hosts: web
   vars:
+    db_password: password
     server_name: curriculum
     service_name: curriculum
     service_version: 1.0

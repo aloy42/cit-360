@@ -4,6 +4,7 @@
     db_password: password
   tasks:
     - name: mariadb_repo
+      become: yes
       copy: src=db/MariaDB.repo dest=/etc/yum.repos.d/MariaDB.repo mode=0644
 
     - name: mariadb_server
@@ -22,7 +23,7 @@
       shell: /usr/bin/mysql_secure_installation </tmp/mariadb_answers.txt
 
     - name: search
-      unarchive: src=db/db.tgz dest=~/
+      unarchive: src=db/db.tgz dest=~/ mode=0755
 
     - name: make_it
       command: ./make_databases.sh {{ db_password }} localhost chdir=~/db
