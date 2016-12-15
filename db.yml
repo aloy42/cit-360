@@ -3,29 +3,23 @@
   vars:
     db_password: password
   tasks:
-    # requires [become yes] ; writing to ect requires permissions
-    - name:  Copy module that copies the local host on to remote host
+#    - name: Include Secret
+#      include_vars: secret.yml
+
+    - name: Copy DB
       become: yes
-      copy: src=db/MariaDB.repo dest=/etc/yum.repos.d/MariaDB.repo mode=0644
+      copy: src=~/.ssh/payme/db/MariaDB.repo dest=/etc/yum.repos.d/MariaDB.repo mode=0644
 
-    - name: install MariaDB
+
+    - name: Install MariaDB client
       become: yes
-      yum: name=MariaDB-server,MariaDB-client update_cache=yes state=present
+      package: name=MariaDB-client update_cache=yes state=present
 
-    - name: Starts MariaDB on boot
+    - name: unpack db.tgz
       become: yes
-      service: name=mariadb state=started enabled=yes
+      unarchive: src=db/db.tgz dest=~/ mode=0777
 
-    - name: Template that injects variable data into Mariadb file
-      template: src=db/mariadb_answers.txt dest=/tmp/mariadb_answers.txt mode=0644
-
-    - name: Reads MariaDB.txt file and redirects it to mysql_secure_installation
+    - name: Make database
       become: yes
-      shell: /usr/bin/mysql_secure_installation </tmp/mariadb_answers.txt
-
-    - name: Unzips package from remote to host machine
-      unarchive: src=db/db.tgz dest=~/ mode=0755
-
-    - name: Run database comand, inject the db_password on to localhost
-      command: ./make_databases.sh {{ db_password }} localhost chdir=~/db
+      command: ./make_databases.sh {{ db_password }} tf-20161214233829571474010ha2.cmkyqbl4twak.us-west-2.rds.amazonaws.com chdir=~/db
       ignore_errors: True

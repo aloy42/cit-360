@@ -1,88 +1,95 @@
 ---
 - hosts: web
   vars:
-   db_password: password
-   server_name: curriculum
-   service_name: curriculum
-   service_version: 1.0
-   app_key: QujjaJs3fxwtnTl7FiqhEEn1ACkf7YZW
-   app_env: test
-   db_host: localhost
-   db_database: curriculum
-   db_username: curriculum
-   db_port: 3306
-   service_dir: /usr/share/nginx/{{ service_name }}
+    server_name: curriculum
+    service_name: curriculum
+    service_version: 1.0
+    app_env: test
+    app_key: QujjaJs3fxwtnTl7FiqhEEn1ACkf7YZW
+    db_host: tf-20161214233829571474010ha2.cmkyqbl4twak.us-west-2.rds.amazonaws.com
+    db_database: curriculum
+    db_username: curriculum
+    db_port: 3306
+    service_dir: /usr/share/nginx/{{ service_name }}
   tasks:
-    - name: Replace line & sets "selinux" permissionz
-      become: yes
-      lineinfile: dest=/etc/sysconfig/selinux regexp="^SELINUX=" line="SELINUX=permissive"
+    - name: Include Secret
+      include_vars: secret.yml
 
-    - become: yes
-      command: setenforce 0
-
-    - name: Installation of (EPEL) [Extended Packages for Enterprise Linux]
+    - name: Yum epel-release
       become: yes
       yum: name=epel-release update_cache=yes state=present
 
-    - name: Installation of [nginx]
+    - name: Install PHP 5.4
       become: yes
-      yum: name=nginx,php,php-fpm,php-ldap,php-mbstring,php-mcrypt,php-mysql,php-phpunit-PHPUnit update_cache=yes state=present
+      shell: yes | yum install php54 php54-fpm php54-ldap php54-mbstring php54-mcrypt php54-pdo
+
+    - name: nginx
+      become: yes
+      yum: name=nginx update_cache=yes state=present
       register: nginx_install
 
-    - name: Composer for Directory installation
+    - name: Download installer
       become: yes
-      shell: curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+      get_url:
+        url: https://getcomposer.org/installer
+        dest: /usr/local/bin/composer
+        mode: 0777
 
-    - name: Module for Copying from nginx source to ECT folder
+    - name: Composer
       become: yes
-      copy: src=web/nginx.conf dest=/etc/nginx/nginx.conf mode=0640
+      shell: php /usr/local/bin/composer --install-dir=/usr/local/bin --filename=composer
+
+    - name:  nginx2
+      become: yes
+      copy: src=~/.ssh/payme/web/nginx.conf dest=/etc/nginx/nginx.conf mode=0000
       register: nginx_conf
 
-    - name: template that injects service_name
+    - name: Configure vhost_conf
       become: yes
-      template: src=web/vhost.conf.j2 dest=/etc/nginx/conf.d/{{ service_name }}.conf mode=0644
+      template: src=~/.ssh/payme/web/vhost.conf.j2 dest=/etc/nginx/conf.d/{{ service_name }}.conf mode=0644
       register: vhost_conf
 
-    - name: Templates
+    - name: register php_conf
       become: yes
-      template: src=web/php.ini.j2 dest=/etc/php.ini mode=0644
+      template: src=~/.ssh/payme/web/php.ini.j2 dest=/etc/php.ini mode=0644
       register: php_conf
 
-    - name: Module Copy from Source to Destination
+    - name: register php_fpm_conf
       become: yes
-      copy: src=web/php-fpm-web.conf dest=/etc/php-fpm.d/www.conf mode=0644
+      copy: src=~/.ssh/payme/web/php-fpm-web.conf dest=/etc/php-fpm.d/www.conf mode=0644
       register: php_fpm_conf
 
-    - name: Boots [nginx] after Restart
+    - name: restart nginx
       become: yes
       service: name=nginx state=restarted enabled=yes
       when: nginx_install|changed or nginx_conf|changed or vhost_conf|changed
 
-    - name: Boots [php-fpm] after Restart
+    - name: restart php-fpm
       become: yes
       service: name=php-fpm state=restarted enabled=yes
       when: nginx_install|changed or php_conf|changed or php_fpm_conf|changed
 
-    - name: File Attributes are Set
+    - name: directory
       become: yes
       file: path="{{ service_dir }}" state=directory
 
-    - name: Copy from Local Machine ; Unzip Archive
+    - name: unpack
       become: yes
-      unarchive: src=web/{{ service_name }}.tgz dest="{{ service_dir }}" mode=0755
+      unarchive: src=~/.ssh/payme/web/{{ service_name }}.tgz dest="{{ service_dir }}" mode=0755
 
-    - name: Composer Installed
+    - name: Composer
       become: yes
       command: /usr/local/bin/composer update chdir={{ service_dir }}
+      ignore_errors: True
 
-    - name: Permissions Changed
+    - name: permissions
       become: yes
-      command: chmod -R 0777 storage chdir="{{ service_dir }}"
+      file: recurse=yes path={{ service_dir }}/storage mode=0777
 
-    - name: Permissions Changed
+    - name: Permission nginx
       become: yes
-      command: chown -R nginx:nginx . chdir="{{ service_dir }}"
+      file: recurse=yes path={{ service_dir }} owner=nginx group=nginx
 
-    - name: Inject Service_Dir
+    - name: Template
       become: yes
-      template: src=web/env.j2 dest="{{ service_dir }}/.env" mode=0644 owner=nginx
+      template: src=~/.ssh/payme/web/env.j2 dest="{{ service_dir }}/.env" mode=0644 owner=nginx
